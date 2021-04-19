@@ -3,7 +3,7 @@ import logging
 import coloredlogs
 from datetime import datetime
 
-import utilities
+from dynamite_remote import utilities
 
 LOG_PATH = './dynamite_remote/logs'
 

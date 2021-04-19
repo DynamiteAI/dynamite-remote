@@ -1,7 +1,7 @@
-import os
-import argparse
-import node
+#! /usr/bin/python3
 
+import argparse
+from dynamite_remote import node
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Dynamite Remote', description='Remotely manage DynamiteNSM nodes across your '

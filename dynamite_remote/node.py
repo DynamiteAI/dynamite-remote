@@ -11,10 +11,9 @@ from typing import Dict, Optional
 import tabulate
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-import const
-import logger
-import utilities
-from database import db, models
+from dynamite_remote.database import db, models
+from dynamite_remote import logger, utilities, const
+
 
 AUTH_PATH = './dynamite_remote/auth'
 

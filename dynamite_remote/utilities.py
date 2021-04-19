@@ -3,8 +3,6 @@ import pty
 import tarfile
 import subprocess
 import multiprocessing
-from configparser import ConfigParser
-
 
 from typing import Optional, Tuple, Union
 
@@ -35,13 +33,13 @@ def create_new_remote_keypair(node_name) -> Tuple[int, str, str]:
 
 
 def execute_over_ssh(args):
-    cmd = ['./bash_scripts/ssh_wrapper.sh']
+    cmd = ['./bash_scripts/dynamite_remote_ssh_wrapper.sh']
     cmd.extend(args)
     pty.spawn(cmd)
 
 
 def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_key_path: str, *dynamite_arguments):
-    import config
+    from dynamite_remote import config
     lock_directory = f'{config.dynamite_remote_root}/locks'
     makedirs(lock_directory)
 

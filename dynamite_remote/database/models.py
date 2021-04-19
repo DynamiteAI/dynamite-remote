@@ -1,8 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy.orm import relationship, backref
-from sqlalchemy import Boolean, DateTime, Column, Integer, String, ForeignKey
-from database.db import Base
+from sqlalchemy import DateTime, Column, Integer, String, ForeignKey
+from dynamite_remote.database.db import Base
 
 
 class NodeToGroupAssociation(Base):
