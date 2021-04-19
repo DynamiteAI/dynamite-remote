@@ -1,5 +1,5 @@
+import datetime
 import io
-import os
 import time
 import json
 import shutil
@@ -7,6 +7,8 @@ import socket
 import tarfile
 import logging
 from typing import Dict, Optional
+
+import tabulate
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 import const
@@ -17,9 +19,29 @@ from database import db, models
 AUTH_PATH = './dynamite_remote/auth'
 
 
+def print_nodes() -> None:
+    """ Print the nodes that are currently installed to the console
+    Returns: None
+    """
+    headers = [
+        'Name', 'Host', 'Port', 'Description', 'Commands Invoked', 'Last Invoke Time'
+    ]
+    rows = []
+    for node in db.db_session.query(models.Node).all():
+        row = [node.name, node.host, node.port, node.description, node.invoke_count, node.last_invoked_at]
+        rows.append(row)
+    print(tabulate.tabulate(rows, headers=headers, tablefmt='fancy_grid'))
+
+
 class Node:
 
     def __init__(self, name: str, verbose: Optional[bool] = False, stdout: Optional[bool] = False):
+        """ Work with an existing node or create a new one
+        Args:
+            name: The name of the node
+            verbose: If True, debug level logs will be printed
+            stdout: If True, print logs to console
+        """
         log_level = logging.INFO
         if verbose:
             log_level = logging.DEBUG
@@ -29,6 +51,15 @@ class Node:
 
     @classmethod
     def create_from_host_str(cls, hoststr: str, verbose: Optional[bool] = False, stdout: Optional[bool] = False):
+        """Alternative method for creating a node from a ip:port pairing
+        Args:
+            hoststr: A host or ip and the port that SSH server is running on.
+            verbose: If True, debug level logs will be printed
+            stdout: If True, print logs to console
+
+        Returns: A `Node` instance
+
+        """
         if ':' in hoststr:
             host, port = hoststr.split(':')
             port = int(port)
@@ -40,10 +71,16 @@ class Node:
             one()
         return cls(metadata.name, verbose, stdout)
 
-    def installed(self):
+    def installed(self) -> bool:
+        """Check if this node has been installed
+        Returns: True, if the node has been installed
+        """
         return bool(self.get_metadata())
 
     def get_metadata(self) -> Optional[models.Node]:
+        """Get the corresponding metadata associated with this node
+        Returns: The SQLAlchemy model containing metadata associated with the node.
+        """
         try:
             metadata = db.db_session.query(models.Node).\
                 filter(models.Node.name == self.name).\
@@ -52,12 +89,32 @@ class Node:
             return None
         return metadata
 
-    def install(self, host: str, port: int, description: str, constants: Optional[Dict] = None):
+    def remove(self) -> None:
+        """ Remove the node metadata and private key from this computer
+        Returns: None
 
+        """
+        install_priv_key_file_path = f'{AUTH_PATH}/{self.name}'
+        db.db_session.query(models.Node).filter_by(name=self.name).delete()
+        db.db_session.commit()
+        utilities.safely_remove_file(install_priv_key_file_path)
+        self.logger.info(f'{self.name} was successfully removed.')
+
+    def install(self, host: str, port: int, description: str, constants: Optional[Dict] = None):
+        """Install a new node
+        Args:
+            host: The host or ip address of the remote node
+            port: The port on which SSH runs
+            description: A description of the node (E.G windows server sensor)
+            constants: A dictionary containing a list of constants associated with this remote node
+
+        Returns: A instance of the node
+
+        """
         def generate_keypair():
             tmp_key_root = '/tmp/dynamite-remote/keys/'
             tmp_priv_key_path = f'{tmp_key_root}/{self.name}'
-            tmp_key_file_path = f'{AUTH_PATH}/{self.name}'
+            install_priv_key_file_path = f'{AUTH_PATH}/{self.name}'
             shutil.rmtree(tmp_key_root, ignore_errors=True)
             ret, stdout, stderr = utilities.create_new_remote_keypair(node_name=self.name)
             if ret != 0:
@@ -67,9 +124,9 @@ class Node:
             utilities.makedirs(AUTH_PATH)
             utilities.set_permissions_of_file(AUTH_PATH, 700)
             with open(tmp_priv_key_path, 'r') as key_in:
-                with open(tmp_key_file_path, 'w') as key_out:
+                with open(install_priv_key_file_path, 'w') as key_out:
                     key_out.write(key_in.read())
-            utilities.set_permissions_of_file(tmp_key_file_path, 600)
+            utilities.set_permissions_of_file(install_priv_key_file_path, 600)
 
         def create_auth_package():
             tmp_pub_key_path = f'/tmp/dynamite-remote/keys/{self.name}.pub'
@@ -114,34 +171,18 @@ class Node:
                          f'install via \'sudo dynamite remote install {self.name}.tar.gz\'.')
         return self
 
-    def invoke_command(self, *dynamite_arguments):
+    def invoke_command(self, *dynamite_arguments) -> None:
+        """ Run a dynamite-nsm cmd compatible command for example: `elasticsearch install --port 8080`
+        Args:
+            *dynamite_arguments: A list of dynamite-nsm cmd compatible commands.
+
+        Returns: None
+        """
         metadata = self.get_metadata()
         time.sleep(1)
         utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
                                                           *dynamite_arguments)
-
-
-def install_node_from_directory(path: str, verbose: Optional[bool] = False, stdout: Optional[bool] = False) -> Node:
-    metadata_fp = f'{path}/metadata.json'
-    with open(metadata_fp, 'r') as metadata_in:
-        metadata_data = json.load(metadata_in)
-        name = metadata_data['name']
-        host = metadata_data['host']
-        port = metadata_data['port']
-        description = metadata_data['description']
-    return Node(
-        name=name,
-        stdout=stdout,
-        verbose=verbose
-    ).install(
-        host=host,
-        port=port,
-        description=description
-    )
-
-
-def install_node_from_tarball(path: str, verbose: Optional[bool] = False, stdout: Optional[bool] = False) -> Node:
-    tmp_archive_dir = f'/tmp/dynamite-remote/{int(time.time())}'
-    utilities.makedirs(tmp_archive_dir)
-    utilities.extract_archive(path, tmp_archive_dir)
-    return install_node_from_directory(tmp_archive_dir, verbose=verbose, stdout=stdout)
+        node_obj = db.db_session.query(models.Node).filter(models.Node.host == metadata.host).first()
+        node_obj.invoke_count = models.Node.invoke_count + 1
+        node_obj.last_invoked_at = datetime.datetime.utcnow()
+        db.db_session.commit()
