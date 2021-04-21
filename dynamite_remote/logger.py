@@ -4,8 +4,9 @@ import coloredlogs
 from datetime import datetime
 
 from dynamite_remote import utilities
+user_home = os.environ.get('HOME')
 
-LOG_PATH = './dynamite_remote/logs'
+LOG_PATH = f'{user_home}/.dynamite_remote/logs'
 
 
 def get_logger(component_name, level=logging.INFO, stdout=True) -> logging.Logger:

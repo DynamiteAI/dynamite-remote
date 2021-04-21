@@ -1,21 +1,28 @@
-import datetime
 import io
+import os
 import time
 import json
 import shutil
 import socket
 import tarfile
 import logging
+import datetime
+
+
 from typing import Dict, Optional
 
+import daemon
+import daemon.pidfile
 import tabulate
+
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from dynamite_remote.database import db, models
 from dynamite_remote import logger, utilities, const
 
+user_home = os.environ.get('HOME')
 
-AUTH_PATH = './dynamite_remote/auth'
+AUTH_PATH = f'{user_home}/.dynamite_remote/auth'
 
 
 def print_nodes() -> None:
@@ -170,7 +177,7 @@ class Node:
                          f'install via \'sudo dynamite remote install {self.name}.tar.gz\'.')
         return self
 
-    def invoke_command(self, *dynamite_arguments) -> None:
+    def invoke_command(self, *dynamite_arguments, run_as_task: Optional[bool] = False) -> None:
         """ Run a dynamite-nsm cmd compatible command for example: `elasticsearch install --port 8080`
         Args:
             *dynamite_arguments: A list of dynamite-nsm cmd compatible commands.
@@ -179,9 +186,29 @@ class Node:
         """
         metadata = self.get_metadata()
         time.sleep(1)
-        utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
-                                                          *dynamite_arguments)
         node_obj = db.db_session.query(models.Node).filter(models.Node.host == metadata.host).first()
         node_obj.invoke_count = models.Node.invoke_count + 1
         node_obj.last_invoked_at = datetime.datetime.utcnow()
         db.db_session.commit()
+
+        if run_as_task:
+            new_task_directory = f'{os.environ.get("HOME")}/.dynamite_remote/tasks/{int(time.time())}'
+            self.logger.info(f'Running in daemon mode.')
+            self.logger.debug(f'Task Directory: {new_task_directory}')
+            utilities.makedirs(new_task_directory)
+            output_logs = open(f'{new_task_directory}/output.log', 'w+')
+            with open(f'{new_task_directory}/command', 'w') as command_out:
+                command_out.write(' '.join(dynamite_arguments))
+            with daemon.DaemonContext(detach_process=True,
+                                      pidfile=daemon.pidfile.PIDLockFile(f'{new_task_directory}/task.pid'),
+                                      stdout=output_logs,
+                                      stderr=output_logs,
+                                      ):
+                utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
+                                                                  *dynamite_arguments)
+            output_logs.close()
+        else:
+            self.logger.info('Running in foreground.')
+            utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
+                                                              *dynamite_arguments)
+

@@ -1,12 +1,11 @@
 import os
-import pty
 import tarfile
 import subprocess
-import multiprocessing
 
 from typing import Optional, Tuple, Union
 
-LOCK_PATH = './dynamite_remote/locks'
+USER_HOME = os.environ.get("HOME")
+LOCK_PATH = f'{USER_HOME}/.dynamite_remote/locks'
 REMOTE_SSH_USER = 'dynamite-remote'
 
 
@@ -14,8 +13,8 @@ class NodeLocked(Exception):
     """
     Thrown a remote node is already running a command
     """
-    def __init__(self, hostname, command):
 
+    def __init__(self, hostname, command):
         msg = f'{hostname} is already running {command}'
         super(NodeLocked, self).__init__(msg)
 
@@ -32,21 +31,22 @@ def create_new_remote_keypair(node_name) -> Tuple[int, str, str]:
     return p.returncode, out.decode('utf-8'), err.decode('utf-8')
 
 
-def execute_over_ssh(args):
-    cmd = ['./bash_scripts/dynamite_remote_ssh_wrapper.sh']
+def execute_over_ssh(*args):
+    cmd = ['bash', f'{os.environ.get("HOME")}/.dynamite_remote/bin/ssh_wrapper.sh']
     cmd.extend(args)
-    pty.spawn(cmd)
+    ssh_subprocess = subprocess.Popen(cmd)
+    ssh_subprocess.communicate()
 
 
-def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_key_path: str, *dynamite_arguments):
-    from dynamite_remote import config
-    lock_directory = f'{config.dynamite_remote_root}/locks'
-    makedirs(lock_directory)
 
+
+def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_key_path: str,
+                                            *dynamite_arguments):
+    makedirs(LOCK_PATH)
     def is_locked():
-        return host_or_ip in os.listdir(lock_directory)
+        return host_or_ip in os.listdir(LOCK_PATH)
 
-    remote_cmd = [f'{REMOTE_SSH_USER}@{host_or_ip}', '-p', str(port), '-t',  '-i', private_key_path]
+    remote_cmd = [f'{REMOTE_SSH_USER}@{host_or_ip}', '-p', str(port), '-t', '-i', private_key_path]
     local_command = ['sudo', '/usr/local/bin/dynamite']
     local_command.extend(dynamite_arguments)
     remote_cmd.extend(local_command)
@@ -54,9 +54,7 @@ def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_
         with open(f'{LOCK_PATH}/{host_or_ip}') as node_lock:
             command = node_lock.read()
             raise NodeLocked(host_or_ip, command)
-    p = multiprocessing.Process(target=execute_over_ssh, args=(remote_cmd, ))
-    p.start()
-
+    execute_over_ssh(*remote_cmd)
 
 def extract_archive(archive_path: str, destination_path: str) -> None:
     """Extract a tar.gz archive to a given destination path.
@@ -98,6 +96,7 @@ def safely_remove_file(path: str) -> None:
     if os.path.exists(path):
         os.remove(path)
 
+
 def set_permissions_of_file(file_path: str, unix_permissions_integer: Union[str, int]) -> None:
     """Set the permissions of a file to unix_permissions_integer
     Args:
@@ -110,7 +109,9 @@ def set_permissions_of_file(file_path: str, unix_permissions_integer: Union[str,
 
 
 def search_for_config():
-    locations = ['/etc/dynamite-remote/config.cfg', '../config.cfg', './config.cfg']
+    locations = [f'{os.environ.get("HOME")}/.dynamite_remote/config.cfg',
+                 '/etc/dynamite-remote/config.cfg',
+                 '../config.cfg', './config.cfg']
     for fp in locations:
         if os.path.exists(fp):
             return fp

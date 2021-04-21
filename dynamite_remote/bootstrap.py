@@ -1,28 +1,15 @@
+import os
+from dynamite_remote import utilities
+
+user_home = os.environ.get('HOME')
+
+
+def create_ssh_wrapper_script():
+    ssh_wrapper_script = '''
 #! /bin/bash
 
-# Locate Configuration Path
+DYNAMITE_REMOTE_LOCKS=$HOME/.dynamite_remote/locks/
 
-CONF_PATH=null;
-
-test_conf_path=/etc/dynamite_remote/config.cfg
-if test -f "$test_conf_path"; then
-    CONF_PATH=$test_conf_path
-fi
-
-test_conf_path=../config.cfg
-if test -f "$test_conf_path"; then
-    CONF_PATH=$test_conf_path
-fi
-
-test_conf_path=./config.cfg
-if test -f "$test_conf_path"; then
-    CONF_PATH=$test_conf_path
-fi
-
-
-
-DYNAMITE_REMOTE_ROOT=$(grep dynamite_remote_root $CONF_PATH | cut -f2 -d'=')
-DYNAMITE_REMOTE_LOCKS=$DYNAMITE_REMOTE_ROOT/locks
 echo $DYNAMITE_REMOTE_LOCKS
 
 # Create the locks directory if it does not exist
@@ -47,5 +34,10 @@ $ssh_command "$@"
 echo Removing lock. $DYNAMITE_REMOTE_LOCKS/$hostname_or_ip
 rm $DYNAMITE_REMOTE_LOCKS/$hostname_or_ip
 printf '[Remote Session Exited]'
+    '''
 
-
+    wrapper_directory = f'{user_home}/.dynamite_remote/bin/'
+    utilities.makedirs(wrapper_directory)
+    with open(f'{wrapper_directory}/ssh_wrapper.sh', 'w') as ssh_wrapper_out:
+        ssh_wrapper_out.write(ssh_wrapper_script)
+        utilities.set_permissions_of_file(f'{wrapper_directory}/ssh_wrapper.sh', '+x')

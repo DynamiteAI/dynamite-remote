@@ -1,9 +1,13 @@
 #! /usr/bin/python3
 
 import argparse
+from multiprocessing import Process
 from dynamite_remote import node
+from dynamite_remote.bootstrap import create_ssh_wrapper_script
 
 if __name__ == '__main__':
+    __spec__ = None
+    create_ssh_wrapper_script()
     parser = argparse.ArgumentParser('Dynamite Remote', description='Remotely manage DynamiteNSM nodes across your '
                                                                     'network environments.')
     subparsers = parser.add_subparsers()
@@ -46,6 +50,10 @@ if __name__ == '__main__':
         'command', help='The command to run on the remote node (E.G \'elasticsearch process status\').', nargs='+',
         type=str
     )
+    execute_parser.add_argument(
+        '-d', '--daemon', dest='daemon', action='store_true',
+        help='Daemonize the command so that it runs in the background as a task.',
+    )
 
     args = parser.parse_args()
     if args.action == 'create':
@@ -68,7 +76,13 @@ if __name__ == '__main__':
             remote_node = node.Node.create_from_host_str(args.remote, stdout=True)
         if not remote_node.installed():
             exit(1)
-        remote_node.invoke_command(*args.command)
+        if not args.daemon:
+            remote_node.invoke_command(*args.command)
+        else:
+            p = Process(target=remote_node.invoke_command, args=args.command, kwargs=dict(run_as_task=True))
+            p.start()
+
+
 
 
 

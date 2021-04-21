@@ -1,10 +1,13 @@
-from os import path
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+user_home = os.environ.get('HOME')
 
-engine = create_engine('sqlite:///' + path.join('nodes.db'), convert_unicode=True)
+DATABASE_PATH = f'{user_home}/.dynamite_remote/nodes.db'
+
+engine = create_engine('sqlite:///' + DATABASE_PATH, convert_unicode=True)
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,
                                          bind=engine))
