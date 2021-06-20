@@ -11,11 +11,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('Dynamite Remote', description='Remotely manage DynamiteNSM nodes across your '
                                                                     'network environments.')
     subparsers = parser.add_subparsers()
-    create_node_parser = subparsers.add_parser('create')
-    remove_node_parser = subparsers.add_parser('remove')
-    list_parser = subparsers.add_parser('list')
-    execute_parser = subparsers.add_parser('execute')
-
+    create_node_parser = subparsers.add_parser('create', 
+                                                 help='Generate an authentication package that can be installed on a '
+                                                      'remote node allowing management. Add the remote to list of '
+                                                      'controllable nodes.')
+    remove_node_parser = subparsers.add_parser('remove', help='Remove a remote that was previously created.')
+    list_parser = subparsers.add_parser('list', help='List the nodes we can control remotely.')
+    execute_parser = subparsers.add_parser('execute', help='Run a command against a remote node.')
     # Create an authentication package
     create_node_parser.set_defaults(action='create')
     create_node_parser.add_argument(
@@ -54,7 +56,11 @@ if __name__ == '__main__':
         '-d', '--daemon', dest='daemon', action='store_true',
         help='Daemonize the command so that it runs in the background as a task.',
     )
-
+    execute_parser.add_argument(
+        '--force', dest='force', action='store_true',
+        help='Removes the lock on the node. This flag should be used sparingly as it could result to '
+             'concurrent tasks running on remote nodes.',
+    )
     args = parser.parse_args()
     if args.action == 'create':
         node.Node(
@@ -76,6 +82,8 @@ if __name__ == '__main__':
             remote_node = node.Node.create_from_host_str(args.remote, stdout=True)
         if not remote_node.installed():
             exit(1)
+        if args.force:
+            remote_node.remove_execute_lock()
         if not args.daemon:
             remote_node.invoke_command(*args.command)
         else:

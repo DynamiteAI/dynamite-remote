@@ -15,7 +15,7 @@ class NodeLocked(Exception):
     """
 
     def __init__(self, hostname, command):
-        msg = f'{hostname} is already running {command}'
+        msg = f'{hostname.strip()} is already running \'{command.strip()}\''
         super(NodeLocked, self).__init__(msg)
 
 
@@ -38,8 +38,6 @@ def execute_over_ssh(*args):
     ssh_subprocess.communicate()
 
 
-
-
 def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_key_path: str,
                                             *dynamite_arguments):
     makedirs(LOCK_PATH)
@@ -55,6 +53,7 @@ def execute_dynamite_command_on_remote_host(host_or_ip: str, port: int, private_
             command = node_lock.read()
             raise NodeLocked(host_or_ip, command)
     execute_over_ssh(*remote_cmd)
+
 
 def extract_archive(archive_path: str, destination_path: str) -> None:
     """Extract a tar.gz archive to a given destination path.

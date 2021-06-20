@@ -205,10 +205,23 @@ class Node:
                                       stderr=output_logs,
                                       ):
                 utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
-                                                                  *dynamite_arguments)
+                                                                      *dynamite_arguments)
+
             output_logs.close()
         else:
             self.logger.info('Running in foreground.')
-            utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
+            try:
+                utilities.execute_dynamite_command_on_remote_host(metadata.host, metadata.port, self.key_path,
                                                               *dynamite_arguments)
+            except utilities.NodeLocked as e:
+                self.logger.error(f'{str(e).strip()}. You may use --force if you want to bypass this lock and '
+                                  f'execute this command anyway.')
+
+    def remove_execute_lock(self):
+        metadata = self.get_metadata()
+        lockfile_path = f'{utilities.LOCK_PATH}/{metadata.host}'
+        self.logger.info(f'Removing lock: {lockfile_path}')
+        utilities.safely_remove_file(lockfile_path)
+
+
 
