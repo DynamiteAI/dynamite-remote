@@ -3,18 +3,24 @@
 ```
 $ dynamite-remote -h
 
-usage: Dynamite Remote [-h] {execute,create} ...
+usage: Dynamite Remote [-h] {create,remove,list,execute} ...
 
 Remotely manage DynamiteNSM nodes across your network environments.
 
 positional arguments:
-  {execute,create}
+  {create,remove,list,execute}
+    create              Generate an authentication package that can be
+                        installed on a remote node allowing management. Add
+                        the remote to list of controllable nodes.
+    remove              Remove a remote that was previously created.
+    list                List the nodes we can control remotely.
+    execute             Run a command against a remote node.
 
 optional arguments:
-  -h, --help        show this help message and exit
+  -h, --help            show this help message and exit
 
 ```
-## Install
+## Install Remote
 
 ```
 $ dynamite-remote create -h
@@ -30,7 +36,7 @@ optional arguments:
                         A description of this node (E.G web-server environment sensor)
 
 ```
-## Execute 
+## Execute on Remote
 
 ```
 $ dynamite-remote execute -h
@@ -44,4 +50,18 @@ positional arguments:
 optional arguments:
   -h, --help  show this help message and exit
 
+```
+
+## Remove Remote
+
+```
+$ dynamite-remote remove -h
+
+usage: Dynamite Remote remove [-h] remote
+
+positional arguments:
+  remote      The name of the node or node group to remove.
+
+optional arguments:
+  -h, --help  show this help message and exit
 ```
