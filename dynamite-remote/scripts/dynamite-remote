@@ -63,11 +63,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     if args.action == 'create':
-        node.Node(
-            name=args.name,
-            stdout=True,
-            verbose=True
-        ).install(
+        node.install(
             host=args.host,
             port=args.port,
             description=args.description,
